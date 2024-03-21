@@ -15,7 +15,11 @@ if "%1" neq "" (
 	goto end
 )
 
-cl /nologo /Od /Oi /Zo /Z7 /RTC1 /GS- /W3 ..\test.c /link /fixed /subsystem:console /out:test.exe /pdb:test.pdb /incremental:no /opt:icf /opt:ref libvcruntime.lib
+set "warnings=-Wall -Wextra -Wshadow -Wconversion -Wnull-dereference -Wdouble-promotion -Wformat=2"
+
+set "ignored_warnings=-Wno-unused-parameter"
+
+clang %warnings% %ignored_warnings% -o test.exe ../test.c
 
 :end
 endlocal
