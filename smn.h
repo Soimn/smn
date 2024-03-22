@@ -1,18 +1,35 @@
 #ifndef SMN_HEADER
 #define SMN_HEADER
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 
 typedef signed __int8  s8;
 typedef signed __int16 s16;
 typedef signed __int32 s32;
 typedef signed __int64 s64;
 
+#define S8_MIN  ((s8) 0x80)
+#define S16_MIN ((s16)0x8000)
+#define S32_MIN ((s32)0x80000000)
+#define S64_MIN ((s64)0x8000000000000000DLL)
+
+#define S8_MAX  ((s8) 0x7F)
+#define S16_MAX ((s16)0x7FFF)
+#define S32_MAX ((s32)0x7FFFFFFF)
+#define S64_MAX ((s64)0x7FFFFFFFFFFFFFFFDLL)
+
 typedef unsigned __int8  u8;
 typedef unsigned __int16 u16;
 typedef unsigned __int32 u32;
 typedef unsigned __int64 u64;
+
+#define U8_MAX  ((u8) 0xFF)
+#define U16_MAX ((u16)0xFFFF)
+#define U32_MAX ((u32)0xFFFFFFFF)
+#define U64_MAX ((u64)0xFFFFFFFFFFFFFFFFULL)
 
 typedef u32 uint;
 
@@ -26,9 +43,20 @@ typedef u8 bool;
 typedef float f32;
 typedef double f64;
 
-// TODO
-#define MAX(A, B) ((A) > (B) ? (A) : (B))
-#define MIN(A, B) ((A) < (B) ? (A) : (B))
+#define MAX(A, B) ({                       \
+    typeof((A)+(B)) __MAX_A = (A);         \
+    typeof((A)+(B)) __MAX_B = (B);         \
+    __MAX_A > __MAX_B ? __MAX_A : __MAX_B; \
+})
+
+#define MIN(A, B) ({                       \
+    typeof((A)+(B)) __MIN_A = (A);         \
+    typeof((A)+(B)) __MIN_B = (B);         \
+    __MIN_A < __MIN_B ? __MIN_A : __MIN_B; \
+})
+
+// TODO: Add safety check
+#define ARRAY_SIZE(A) (sizeof(A)/sizeof(0[A]))
 
 #ifndef SMN_NO_ASSERT
 #define ASSERT(EX, ...) ((EX) ? 1 : (AssertHandler(__FILE__, __LINE__, #EX, "" __VA_ARGS__), 0))
@@ -63,13 +91,41 @@ typedef struct SB__Header
   u32 cap;
 } SB__Header;
 
+void** SB__Resize(void** sbuf, umm elem_size, u8 elem_align, umm new_len);
+
 #define SB(T) T*
 
 #define SB__Header(S) ((SB__Header*)(*(S)) - 1)
-#define SB_Len(S) (*(S) == 0 ? 0 : (u32){SB__Header(S)->len})
-#define SB_Cap(S) (*(S) == 0 ? 0 : (u32){SB__Header(S)->cap})
-#define SB_Append(S, E) ((*(S))[SB__Resize(S, sizeof(**(S)), alignof(**(S)), SB_Len(S)+1)-1] = (E))
-#define SB_Prepend(S, E)
+
+#define SB_Len(S) ({ (void)**(S); (*(S) == 0 ? 0 : SB__Header(S)->len); })
+#define SB_Cap(S) ({ (void)**(S); (*(S) == 0 ? 0 : SB__Header(S)->cap); })
+
+#define SB_Append(S, E) ({                                                 \
+    (void)**(S);                                                           \
+    SB__Resize((void**)(S), sizeof(**(S)), __alignof(**(S)), SB_Len(S)+1); \
+    (*(S))[SB_Len(S)-1] = (E);                                             \
+})
+
+#define SB_Prepend(S, E) ({                                                \
+    (void)**(S);                                                           \
+    SB__Resize((void**)(S), sizeof(**(S)), __alignof(**(S)), SB_Len(S)+1); \
+    memmove(*(S)+1, *(S), sizeof(**(S))*(SB_Len(S)-1));                    \
+    (*(S))[0] = (E);                                                       \
+})
+
+#define SB_UnorderedRemove(S, I) ({                                        \
+    (void)**(S);                                                           \
+    ASSERT((I) >= 0 && (I) < SB_Len(S));                                   \
+    (*(S))[I] = (*(S))[SB_Len(S)-1];                                       \
+    SB__Resize((void**)(S), sizeof(**(S)), __alignof(**(S)), SB_Len(S)-1); \
+})
+
+#define SB_OrderedRemove(S, I) ({                                          \
+    (void)**(S);                                                           \
+    ASSERT((I) >= 0 && (I) < SB_Len(S));                                   \
+    memcpy(*(S)+(I), *(S)+(I)+1, sizeof(**(S))*(SB_Len(S)-((I)+1)));       \
+    SB__Resize((void**)(S), sizeof(**(S)), __alignof(**(S)), SB_Len(S)-1); \
+})
 
 #ifdef SMN_IMPLEMENTATION
 
@@ -81,8 +137,10 @@ AssertHandler(char* file, uint line, char* expr, char* msg, ...)
   fprintf(stderr, "%s(%u): Assertion \"%s\" failed\n", file, line, expr);
   if (msg != 0)
   {
-    // TODO
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
     vfprintf(stderr, msg, args);
+#pragma clang diagnostic pop
     putc('\n', stderr);
   }
   va_end(args);
@@ -162,28 +220,34 @@ String_ChopN(String s, umm amount)
   };
 }
 
-u32
+void**
 SB__Resize(void** sbuf, umm elem_size, u8 elem_align, umm new_len)
 {
   ASSERT(sizeof(SB__Header) % 8 == 0);
+  ASSERT(new_len <= U32_MAX/elem_size);
 
   if (*sbuf == 0)
   {
     umm new_cap = MAX(new_len, 4);
+    ASSERT(new_cap <= U32_MAX);
+
     *sbuf = (u8*)malloc(sizeof(SB__Header) + new_cap*elem_size) + sizeof(SB__Header);
+    SB__Header(sbuf)->cap = (u32)new_cap;
   }
   else if (SB__Header(sbuf)->cap < new_len)
   {
     umm new_cap = 2*SB__Header(sbuf)->cap;
+    ASSERT(new_cap <= U32_MAX);
+
     if (new_cap < new_len) new_cap = new_len;
 
-    *sbuf = (u8*)realloc((u8*)*sbuf - sizeof(SB__Header), sizeof(SB__Header) + SB__Header(sbuf)->cap*elem_size, sizeof(SB__Header) + new_cap*elem_size) + sizeof(SB__Header);
-    SB__Header(sbuf)->cap = new_cap;
+    *sbuf = (u8*)realloc((u8*)*sbuf - sizeof(SB__Header), sizeof(SB__Header) + new_cap*elem_size) + sizeof(SB__Header);
+    SB__Header(sbuf)->cap = (u32)new_cap;
   }
 
-  SB__Header(sbuf)->len = new_len;
+  SB__Header(sbuf)->len = (u32)new_len;
 
-  return new_len;
+  return sbuf;
 }
 
 #endif

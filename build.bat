@@ -19,7 +19,7 @@ set "warnings=-Wall -Wextra -Wshadow -Wconversion -Wnull-dereference -Wdouble-pr
 
 set "ignored_warnings=-Wno-unused-parameter"
 
-clang %warnings% %ignored_warnings% -o test.exe ../test.c
+clang %warnings% %ignored_warnings% -std=gnu11 -o test.exe ../test.c
 
 :end
 endlocal
