@@ -17,9 +17,17 @@ if "%1" neq "" (
 
 set "warnings=-Wall -Wextra -Wshadow -Wconversion -Wnull-dereference -Wdouble-promotion -Wformat=2"
 
-set "ignored_warnings=-Wno-unused-parameter"
+set "ignored_warnings=-Wno-unused-parameter -Wno-gnu-statement-expression-from-macro-expansion"
+set "ignored_warnings=%ignored_warnings% -Wno-strict-prototypes -Wno-gnu-zero-variadic-macro-arguments"
+set "ignored_warnings=%ignored_warnings% -Wno-missing-prototypes -Wno-declaration-after-statement"
+set "ignored_warnings=%ignored_warnings% -Wno-language-extension-token -Wno-cast-qual -Wno-gnu-pointer-arith"
 
-clang %warnings% %ignored_warnings% -std=gnu11 -o test.exe ../test.c
+set "opt_options= /Zo /Z7 /Od /Oi"
+
+set "link_options= /subsystem:console /opt:icf /opt:ref /incremental:no /pdb:test.pdb /out:test.exe"
+set "link_options=%link_options% clang_rt.builtins-x86_64.lib"
+
+clang-cl %opt_options% %warnings% %ignored_warnings% -fsanitize=address,undefined ..\test.c /link %link_options%
 
 :end
 endlocal
