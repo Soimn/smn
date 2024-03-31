@@ -87,6 +87,15 @@ Test_SBMap()
   ASSERT(SBMap_Has(&si, STRING("World")));
   ASSERT(({ int v = 0; SBMap_Get(&si, STRING("Hello"), &v); v; }) == 42);
   ASSERT(({ int v = 0; SBMap_Get(&si, STRING("World"), &v); v; }) == 69);
+
+  SBMap_Clr(&si);
+  ASSERT(!SBMap_Has(&si, STRING("Hello")));
+  ASSERT(!SBMap_Has(&si, STRING("World")));
+
+  SBMap_Destroy(&si);
+  ASSERT(si == 0);
+
+  // TODO:
 }
 
 int

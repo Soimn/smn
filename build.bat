@@ -25,9 +25,11 @@ set "ignored_warnings=%ignored_warnings% -Wno-language-extension-token -Wno-cast
 set "opt_options= /Zo /Z7 /Od /Oi"
 
 set "link_options= /subsystem:console /opt:icf /opt:ref /incremental:no /pdb:test.pdb /out:test.exe"
-set "link_options=%link_options% clang_rt.builtins-x86_64.lib"
+set "link_options=%link_options% clang_rt.builtins-x86_64.lib /out:test.exe /pdb:test.pdb /debug:full"
 
-clang-cl %opt_options% %warnings% %ignored_warnings% -fsanitize=address,undefined ..\test.c /link %link_options%
+set "sanitizers= -fsanitize=address,undefined"
+
+clang-cl %opt_options% %warnings% %ignored_warnings% %sanitizers% ..\test.c /link %link_options%
 
 :end
 endlocal

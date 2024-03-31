@@ -76,6 +76,11 @@ typedef double f64;
 #define CONCAT_(A, B) CONCAT__(A, B)
 #define CONCAT(A, B) CONCAT_(A, B)
 
+#define ALIGN_FORWARD(N, A) (((N) + ((A)-1)) & ~(typeof((N)+(A)))((A)-1))
+#define ALIGN_BACKWARD(N, A) ((N) & ~(typeof((N)+(A)))((A)-1))
+
+#define IS_POW_2(N) (((N) & ((N)-1)) == 0 && (N) != 0)
+
 #ifndef SMN_NO_ASSERT
 #define ASSERT(EX, ...) ((EX) ? 1 : (AssertHandler(__FILE__, __LINE__, (char*)__FUNCTION__, #EX, "" __VA_ARGS__), 0))
 #else
@@ -207,6 +212,7 @@ void** SB__Reserve(void** sbuf, umm elem_size, u8 elem_align, umm new_len);
 // void SBMap_Put(SBMap(K, V)* map, K key, V value)
 // bool SBMap_Has(SBMap(K, V)* map, K key)
 // void SBMap_Del(SBMap(K, V)* map, K key)
+// void SBMap_Clr(SBMap(K, V)* map)
 
 typedef struct SBMap__Header
 {
@@ -220,32 +226,6 @@ typedef struct SBMap__Header
   u32 entry_size;
 } SBMap__Header;
 
-void SBMap__Create(void** map, u64 (*hash_func)(void*), bool (*match_func)(void* a, void* b),
-                   u8 key_size, u8 value_offset, u16 value_size);
-bool SBMap__Get(void** map, void* key, void* value);
-void SBMap__Put(void** map, void* key, void* value);
-bool SBMap__Has(void** map, void* key);
-void SBMap__Del(void** map, void* key);
-
-#define SBMap__HashMatchImpl(T, HE, ME)                                                    \
-  u64 SBMap__Hash##T(void* _key) { T key = *(T*)_key; return (u64)(HE); }                 \
-  bool SBMap__Match##T(void* _a, void* _b) { T a = *(T*)_a; T b = *(T*)_b; return (ME); } \
-
-SBMap__HashMatchImpl(int,  key, a == b)
-SBMap__HashMatchImpl(uint, key, a == b)
-SBMap__HashMatchImpl(s8,   key, a == b)
-SBMap__HashMatchImpl(s16,  key, a == b)
-SBMap__HashMatchImpl(s32,  key, a == b)
-SBMap__HashMatchImpl(s64,  key, a == b)
-SBMap__HashMatchImpl(u8,   key, a == b)
-SBMap__HashMatchImpl(u16,  key, a == b)
-SBMap__HashMatchImpl(u32,  key, a == b)
-SBMap__HashMatchImpl(u64,  key, a == b)
-SBMap__HashMatchImpl(smm,  key, a == b)
-SBMap__HashMatchImpl(umm,  key, a == b)
-SBMap__HashMatchImpl(bool, key, !!a == !!b)
-SBMap__HashMatchImpl(String, String_FNV(key), String_Match(a, b))
-
 #define SBMap(K, V) struct { u64 hash; K key; V value; }*
 
 #define SBMap__Header(M) ((SBMap__Header*)*(M)-1)
@@ -253,8 +233,36 @@ SBMap__HashMatchImpl(String, String_FNV(key), String_Match(a, b))
 #define SBMap__ValueType(M) typeof((*(M))->value)
 
 #define SBMap__EmptyHash   (1ULL << 63)
-#define SBMap__DeletedHash (U64_MAX)
 #define SBMap__IsOccupied(S) (!(*(S) >> 63))
+
+#define SBMap__MaxLoadPercent 69
+
+void SBMap__Create(void** map, u64 (*hash_func)(void*), bool (*match_func)(void* a, void* b),
+                   u8 key_size, u8 value_offset, u16 value_size);
+bool SBMap__Get(void** map, void* key, void* value);
+void SBMap__Put(void** map, void* key, void* value);
+bool SBMap__Has(void** map, void* key);
+void SBMap__Del(void** map, void* key);
+void SBMap__Clr(void** map);
+
+#define SBMap__HashMatchImpl(T, HE, ME)                                                    \
+  u64 SBMap__Hash##T(void* _key) { T key = *(T*)_key; return (u64)(HE); }                 \
+  bool SBMap__Match##T(void* _a, void* _b) { T a = *(T*)_a; T b = *(T*)_b; return (ME); } \
+
+SBMap__HashMatchImpl(int,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(uint, String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(s8,   String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(s16,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(s32,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(s64,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(u8,   String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(u16,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(u32,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(u64,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(smm,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(umm,  String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), a == b)
+SBMap__HashMatchImpl(bool, String_FNV((String){ .data = (u8*)&key, .size = sizeof(key) }), !!a == !!b)
+SBMap__HashMatchImpl(String, String_FNV(key), String_Match(a, b))
 
 #define SBMap_Create(M, H, C) ({                                                            \
     (void)**(M);                                                                            \
@@ -268,29 +276,39 @@ SBMap__HashMatchImpl(String, String_FNV(key), String_Match(a, b))
 
 #define SBMap_CreateT(M, T) SBMap_Create(M, CONCAT(SBMap__Hash, T), CONCAT(SBMap__Match, T))
 
-// TODO:
-#define SBMap_Destroy(M) ({ (void)**(M); })
+#define SBMap_Destroy(M) ({ (void)**(M); free(SBMap__Header(M)); *(M) = 0; (void)0; })
 
-#define SBMap_Get(M, K, V) ({                                                                                      \
-    (void)**(M);                                                                                                   \
-    SBMap__Get((void**)(M), ({ SBMap__KeyType(M) key = (K); &key; }), ({ SBMap__ValueType(M)* val = (V); val; })); \
+#define SBMap_Get(M, K, V) ({                                 \
+    (void)**(M);                                              \
+    typeof(SBMap__KeyType(M)) SBMap__Get_key    = (K);        \
+    typeof(SBMap__ValueType(M)*) SBMap__Get_val = (V);        \
+    SBMap__Get((void**)(M), &SBMap__Get_key, SBMap__Get_val); \
 })
 
-#define SBMap_Put(M, K, V) ({                                                                                      \
-    (void)**(M);                                                                                                   \
-    SBMap__Put((void**)(M), ({ SBMap__KeyType(M) key = (K); &key; }), ({ SBMap__ValueType(M) val = (V); &val; })); \
-    (void)0;                                                                                                       \
+#define SBMap_Put(M, K, V) ({                                    \
+    (void)**(M);                                                 \
+    typeof(SBMap__KeyType(M)) SBMap__Put_key   = (K);            \
+    typeof(SBMap__ValueType(M)) SBMap__Put_val = (V);            \
+    SBMap__Put((void**)(M), &SBMap__Put_key, &SBMap__Put_val);   \
+    (void)0;                                                     \
 })
 
-#define SBMap_Has(M, K) ({                                             \
-    (void)**(M);                                                       \
-    SBMap__Has((void**)(M), ({ SBMap__KeyType(M) key = (K); &key; })); \
+#define SBMap_Has(M, K) ({                          \
+    (void)**(M);                                    \
+    typeof(SBMap__KeyType(M)) SBMap__Has_key = (K); \
+    SBMap__Has((void**)(M), &SBMap__Has_key);       \
 })
 
-#define SBMap_Del(M, K) ({                                             \
-    (void)**(M);                                                       \
-    SBMap__Del((void**)(M), ({ SBMap__KeyType(M) key = (K); &key; })); \
-    (void)0;                                                           \
+#define SBMap_Del(M, K) ({                          \
+    (void)**(M);                                    \
+    typeof(SBMap__KeyType(M)) SBMap__Del_key = (K); \
+    SBMap__Del((void**)(M), &SBMap__Del_key);       \
+    (void)0;                                        \
+})
+
+#define SBMap_Clr(M) ({      \
+    (void)**(M);             \
+    SBMap__Clr((void**)(M)); \
 })
 
 #ifdef SMN_IMPLEMENTATION
@@ -622,7 +640,7 @@ SBMap__Create(void** map, u64 (*hash_func)(void*), bool (*match_func)(void* a, v
               u8 key_size, u8 value_offset, u16 value_size)
 {
   u32 init_cap = 128;
-  u32 entry_size = (sizeof(u64) + value_offset + value_size + 7) & ~7UL;
+  u32 entry_size = ALIGN_FORWARD(value_offset + value_size, 8);
 
   SBMap__Header* header = malloc(sizeof(SBMap__Header) + init_cap*entry_size);
   *header = (SBMap__Header){
@@ -671,50 +689,26 @@ SBMap__Resize(void** map, u32 new_cap)
   *map = new_map;
 }
 
-// TODO: What to do when every slot is either occupied or deleted? (infinite loop)
 inline u64*
-SBMap__Walk(void** map, u64 hash, void* key, bool stop_on_deleted)
+SBMap__Walk(void** map, u64 hash, void* key)
 {
-  uint scan = hash % SBMap__Header(map)->cap;
+  ASSERT(IS_POW_2(SBMap__Header(map)->cap));
 
-  u64* first_deleted = 0;
-  u64* found_slot    = 0;
-
-  for (;; scan = (scan+1) % SBMap__Header(map)->cap)
+  for (uint scan = hash & (SBMap__Header(map)->cap-1);; scan = (scan+1) & (SBMap__Header(map)->cap-1))
   {
     u64* slot = (u64*)((void*)*map + scan*SBMap__Header(map)->entry_size);
 
-    if (first_deleted == 0 && *slot == hash % SBMap__Header(map)->cap)
+    if (*slot == SBMap__EmptyHash || (*slot == hash && SBMap__Header(map)->match_func(slot+1, key)))
     {
-      first_deleted = slot;
-    }
-
-    if (*slot == SBMap__EmptyHash                        ||
-        (*slot == SBMap__DeletedHash && stop_on_deleted) ||
-        (*slot == hash && SBMap__Header(map)->match_func(slot+1, key)))
-    {
-      found_slot = slot;
-      break;
+      return slot;
     }
   }
-
-  if (first_deleted != 0)
-  {
-    u8 val_off = SBMap__Header(map)->value_offset;
-    memcpy(found_slot+1, first_deleted+1, SBMap__Header(map)->key_size);
-    memcpy((u8*)found_slot + val_off, (u8*)first_deleted + val_off, SBMap__Header(map)->value_size);
-
-    *found_slot = SBMap__DeletedHash;
-    found_slot = first_deleted;
-  }
-
-  return found_slot;
 }
 bool
 SBMap__Get(void** map, void* key, void* value)
 {
   u64 hash  = SBMap__HashKey(map, key);
-  u64* slot = SBMap__Walk(map, hash, key, false);
+  u64* slot = SBMap__Walk(map, hash, key);
 
   bool is_occ = SBMap__IsOccupied(slot);
   if (is_occ)
@@ -728,13 +722,13 @@ SBMap__Get(void** map, void* key, void* value)
 void
 SBMap__Put(void** map, void* key, void* value)
 {
-  if ((f32)SBMap__Header(map)->len/(f32)SBMap__Header(map)->cap >= 0.69f)
+  if (SBMap__Header(map)->len*100 >= SBMap__Header(map)->cap*SBMap__MaxLoadPercent)
   {
     SBMap__Resize(map, SBMap__Header(map)->cap*2);
   }
 
   u64 hash  = SBMap__HashKey(map, key);
-  u64* slot = SBMap__Walk(map, hash, key, true);
+  u64* slot = SBMap__Walk(map, hash, key);
   
   *slot = hash;
   memcpy(slot+1, key, SBMap__Header(map)->key_size);
@@ -747,7 +741,7 @@ bool
 SBMap__Has(void** map, void* key)
 {
   u64 hash  = SBMap__HashKey(map, key);
-  u64* slot = SBMap__Walk(map, hash, key, false);
+  u64* slot = SBMap__Walk(map, hash, key);
 
   return SBMap__IsOccupied(slot);
 }
@@ -758,10 +752,44 @@ SBMap__Del(void** map, void* key)
   // NOTE: Adapted from https://en.wikipedia.org/wiki/Open_addressing
 
   u64 hash  = SBMap__HashKey(map, key);
-  u64* slot = SBMap__Walk(map, hash, key, false);
+  u64* slot = SBMap__Walk(map, hash, key);
 
-  *slot = SBMap__DeletedHash;
+  *slot = SBMap__EmptyHash;
   SBMap__Header(map)->len -= 1;
+
+  uint entry_size = SBMap__Header(map)->entry_size;
+
+  uint probe_idx = (uint)((void*)slot - *map)/entry_size + 1;
+
+  for (uint i = probe_idx, j = probe_idx;; i = (i+1) & ~SBMap__Header(map)->cap)
+  {
+    u64* i_slot = *map + i*entry_size;
+
+    if (*i_slot == SBMap__EmptyHash) break;
+    else
+    {
+      u64 h = *i_slot & (SBMap__Header(map)->cap-1);
+
+      if ((j < i && h > j && h <= i) || (i < j && (h > j || h <= i))) continue;
+      else
+      {
+        memcpy(*map + j*entry_size, i_slot, entry_size);
+        *i_slot = SBMap__EmptyHash;
+        j = i;
+      }
+    }
+  }
+}
+
+void
+SBMap__Clr(void** map)
+{
+  for (uint i = 0; i < SBMap__Header(map)->cap; ++i)
+  {
+    *(u64*)((void*)*map + i*SBMap__Header(map)->entry_size) = SBMap__EmptyHash;
+  }
+
+  SBMap__Header(map)->len = 0;
 }
 
 #endif
