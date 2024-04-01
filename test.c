@@ -54,6 +54,18 @@ Test_SB()
   ASSERT(SB_Len(&ia) == 3 && SB_Cap(&ia) == 4 && ia[0] == 1 && ia[1] == 4 && ia[2] == 3);
   SB_OrderedRemove(&ia, 1);
   ASSERT(SB_Len(&ia) == 2 && SB_Cap(&ia) == 4 && ia[0] == 1 && ia[1] == 3);
+
+  SB_Append(&ia, 69);
+  SB_Append(&ia, 7);
+  SB_Prepend(&ia, 128);
+
+  SB_QuickSortT(&ia, int, false);
+
+  ASSERT(SB_Len(&ia) == 5 && ia[0] == 1 && ia[1] == 3 && ia[2] == 7 && ia[3] == 69 && ia[4] == 128);
+
+  SB_QuickSortT(&ia, int, true);
+
+  ASSERT(SB_Len(&ia) == 5 && ia[0] == 1 && ia[1] == 3 && ia[2] == 7 && ia[3] == 69 && ia[4] == 128);
 }
 
 void
